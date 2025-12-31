@@ -1,10 +1,67 @@
 const axios = require('axios');
-require('dotenv').config();
+const { queryOne } = require('../database/connection');
 
-const SMS_ENABLED = process.env.SMS_ENABLED === 'true';
-const SMS_USERNAME = process.env.SMS_USERNAME || '';
-const SMS_PASSWORD = process.env.SMS_PASSWORD || '';
-const SMS_SIGN = process.env.SMS_SIGN || '';
+let smsConfig = null;
+
+/**
+ * 从数据库加载短信配置
+ */
+async function loadSMSConfig() {
+  try {
+    const { query } = require('../database/connection');
+    const configs = await query(
+      `SELECT config_key, config_value FROM system_configs 
+       WHERE config_key IN ('sms_enabled', 'sms_username', 'sms_password', 'sms_sign')
+       ORDER BY config_key`
+    );
+
+    if (!configs || configs.length === 0) {
+      return null;
+    }
+
+    const config = {
+      enabled: false,
+      username: '',
+      password: '',
+      sign: ''
+    };
+
+    configs.forEach(item => {
+      const key = item.config_key;
+      const value = item.config_value || '';
+      
+      if (key === 'sms_enabled') {
+        config.enabled = value === 'true';
+      } else if (key === 'sms_username') {
+        config.username = value;
+      } else if (key === 'sms_password') {
+        config.password = value;
+      } else if (key === 'sms_sign') {
+        config.sign = value;
+      }
+    });
+
+    return config;
+  } catch (error) {
+    console.error('加载短信配置失败:', error);
+    return null;
+  }
+}
+
+/**
+ * 初始化短信配置
+ */
+async function initSMS() {
+  smsConfig = await loadSMSConfig();
+}
+
+/**
+ * 重新加载配置（配置更新后调用）
+ */
+async function reloadConfig() {
+  smsConfig = null;
+  await initSMS();
+}
 
 /**
  * 发送短信（smsbao短信宝）
@@ -13,11 +70,15 @@ const SMS_SIGN = process.env.SMS_SIGN || '';
  * @returns {Promise<Object>}
  */
 async function sendSMS(phone, content) {
-  if (!SMS_ENABLED) {
+  if (!smsConfig) {
+    await initSMS();
+  }
+
+  if (!smsConfig || !smsConfig.enabled) {
     throw new Error('短信服务未启用');
   }
 
-  if (!SMS_USERNAME || !SMS_PASSWORD) {
+  if (!smsConfig.username || !smsConfig.password) {
     throw new Error('短信服务配置不完整');
   }
 
@@ -25,10 +86,10 @@ async function sendSMS(phone, content) {
     // smsbao短信宝API
     const url = 'https://api.smsbao.com/sms';
     const params = {
-      u: SMS_USERNAME,
-      p: SMS_PASSWORD,
+      u: smsConfig.username,
+      p: smsConfig.password,
       m: phone,
-      c: `${SMS_SIGN}${content}`,
+      c: `${smsConfig.sign || ''}${content}`,
     };
 
     const response = await axios.get(url, { params });
@@ -66,7 +127,8 @@ async function sendVerificationCode(phone, code) {
 }
 
 module.exports = {
+  initSMS,
+  reloadConfig,
   sendSMS,
   sendVerificationCode
 };
-

@@ -205,22 +205,7 @@ async function createTables() {
 async function initDefaultData() {
   const dialect = getSqlDialect();
   
-  // 创建默认应用
-  const defaultApp = await query('SELECT * FROM apps WHERE app_id = ?', [process.env.DEFAULT_APP_ID || 'default-app']);
-  if (defaultApp.length === 0) {
-    await run(
-      'INSERT INTO apps (app_id, app_name, app_secret, login_mode, charge_mode, status) VALUES (?, ?, ?, ?, ?, ?)',
-      [
-        process.env.DEFAULT_APP_ID || 'default-app',
-        '默认应用',
-        process.env.DEFAULT_APP_SECRET || 'default-secret',
-        'password',
-        'free',
-        'active'
-      ]
-    );
-    console.log('默认应用创建完成');
-  }
+  // 不再创建默认应用，应用需要通过后台管理接口创建
 
   // 创建默认会员等级
   const defaultLevel = await query('SELECT * FROM member_levels WHERE level_value = 1');
@@ -243,22 +228,7 @@ async function initDefaultData() {
     console.log('默认管理员创建完成（用户名: admin, 密码: admin123）');
   }
 
-  // 初始化系统配置
-  const configs = [
-    { key: 'sms_enabled', value: process.env.SMS_ENABLED || 'false', type: 'boolean', desc: '短信服务是否启用' },
-    { key: 'email_enabled', value: process.env.EMAIL_ENABLED || 'false', type: 'boolean', desc: '邮件服务是否启用' },
-    { key: 'storage_type', value: process.env.STORAGE_TYPE || 'r2', type: 'string', desc: '存储类型' },
-  ];
-
-  for (const config of configs) {
-    const existing = await query('SELECT * FROM system_configs WHERE config_key = ?', [config.key]);
-    if (existing.length === 0) {
-      await run(
-        'INSERT INTO system_configs (config_key, config_value, config_type, description) VALUES (?, ?, ?, ?)',
-        [config.key, config.value, config.type, config.desc]
-      );
-    }
-  }
+  // 不再初始化系统配置，配置需要通过后台管理接口设置
 
   console.log('默认数据初始化完成');
 }

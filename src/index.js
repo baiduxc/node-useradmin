@@ -59,21 +59,12 @@ async function start() {
     // 初始化数据库
     initDatabase();
     
-    // 初始化存储服务
-    if (process.env.STORAGE_TYPE) {
-      initStorage();
-    }
-    
-    // 初始化邮件服务
-    if (process.env.EMAIL_ENABLED === 'true') {
-      initEmail();
-    }
-    
     // 启动服务器
     app.listen(PORT, () => {
       console.log(`服务器运行在 http://localhost:${PORT}`);
       console.log(`环境: ${process.env.NODE_ENV || 'development'}`);
       console.log(`数据库类型: ${process.env.DB_TYPE || 'sqlite'}`);
+      console.log('提示: 存储、邮件、短信服务配置需要在后台管理中设置');
     });
   } catch (error) {
     console.error('启动失败:', error);

@@ -1,28 +1,98 @@
 const nodemailer = require('nodemailer');
-require('dotenv').config();
+const { queryOne } = require('../database/connection');
 
-const EMAIL_ENABLED = process.env.EMAIL_ENABLED === 'true';
 let transporter = null;
+let emailConfig = null;
+
+/**
+ * 从数据库加载邮件配置
+ */
+async function loadEmailConfig() {
+  try {
+    const { query } = require('../database/connection');
+    const configs = await query(
+      `SELECT config_key, config_value FROM system_configs 
+       WHERE config_key IN ('email_enabled', 'email_host', 'email_port', 'email_secure', 'email_user', 'email_password', 'email_from')
+       ORDER BY config_key`
+    );
+
+    if (!configs || configs.length === 0) {
+      return null;
+    }
+
+    const config = {
+      enabled: false,
+      host: '',
+      port: 587,
+      secure: false,
+      user: '',
+      password: '',
+      from: ''
+    };
+
+    configs.forEach(item => {
+      const key = item.config_key;
+      const value = item.config_value || '';
+      
+      if (key === 'email_enabled') {
+        config.enabled = value === 'true';
+      } else if (key === 'email_host') {
+        config.host = value;
+      } else if (key === 'email_port') {
+        config.port = parseInt(value || '587');
+      } else if (key === 'email_secure') {
+        config.secure = value === 'true';
+      } else if (key === 'email_user') {
+        config.user = value;
+      } else if (key === 'email_password') {
+        config.password = value;
+      } else if (key === 'email_from') {
+        config.from = value;
+      }
+    });
+
+    return config;
+  } catch (error) {
+    console.error('加载邮件配置失败:', error);
+    return null;
+  }
+}
 
 /**
  * 初始化邮件服务
  */
-function initEmail() {
-  if (!EMAIL_ENABLED) {
+async function initEmail() {
+  emailConfig = await loadEmailConfig();
+  
+  if (!emailConfig || !emailConfig.enabled) {
+    return;
+  }
+
+  if (!emailConfig.host || !emailConfig.user || !emailConfig.password) {
+    console.log('邮件配置不完整，邮件服务将不可用');
     return;
   }
 
   transporter = nodemailer.createTransport({
-    host: process.env.EMAIL_HOST,
-    port: parseInt(process.env.EMAIL_PORT || '587'),
-    secure: process.env.EMAIL_SECURE === 'true',
+    host: emailConfig.host,
+    port: emailConfig.port,
+    secure: emailConfig.secure,
     auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD,
+      user: emailConfig.user,
+      pass: emailConfig.password,
     },
   });
 
   console.log('邮件服务已初始化');
+}
+
+/**
+ * 重新加载配置（配置更新后调用）
+ */
+async function reloadConfig() {
+  emailConfig = null;
+  transporter = null;
+  await initEmail();
 }
 
 /**
@@ -34,17 +104,21 @@ function initEmail() {
  * @returns {Promise<Object>}
  */
 async function sendEmail(to, subject, html, text = null) {
-  if (!EMAIL_ENABLED) {
+  if (!emailConfig || !emailConfig.enabled) {
     throw new Error('邮件服务未启用');
   }
 
   if (!transporter) {
-    initEmail();
+    await initEmail();
+  }
+
+  if (!transporter) {
+    throw new Error('邮件服务配置不完整');
   }
 
   try {
     const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
+      from: emailConfig.from || emailConfig.user,
       to,
       subject,
       text: text || html.replace(/<[^>]*>/g, ''), // 如果没有text，从html中提取纯文本
@@ -78,7 +152,7 @@ async function sendVerificationCode(email, code) {
 
 module.exports = {
   initEmail,
+  reloadConfig,
   sendEmail,
   sendVerificationCode
 };
-

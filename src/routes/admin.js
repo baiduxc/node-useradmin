@@ -568,7 +568,7 @@ router.put('/configs/:key', verifyAdmin, [
 router.get('/storage', verifyAdmin, async (req, res) => {
   try {
     const configs = await query(
-      `SELECT * FROM system_configs 
+      `SELECT config_key, config_value FROM system_configs 
        WHERE config_key IN ('storage_type', 'r2_account_id', 'r2_access_key_id', 'r2_secret_access_key', 'r2_bucket_name', 'r2_public_url', 'tencent_secret_id', 'tencent_secret_key', 'tencent_region', 'tencent_bucket', 'tencent_public_url')
        ORDER BY config_key ASC`
     );
@@ -586,21 +586,38 @@ router.get('/storage', verifyAdmin, async (req, res) => {
       tencent: {
         secret_id: '',
         secret_key: '',
-        region: '',
+        region: 'ap-guangzhou',
         bucket: '',
         public_url: ''
       }
     };
 
     configs.forEach(config => {
-      if (config.config_key === 'storage_type') {
-        storageConfig.storage_type = config.config_value;
-      } else if (config.config_key.startsWith('r2_')) {
-        const key = config.config_key.replace('r2_', '').replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-        storageConfig.r2[key] = config.config_value || '';
-      } else if (config.config_key.startsWith('tencent_')) {
-        const key = config.config_key.replace('tencent_', '').replace(/_([a-z])/g, (_, c) => c.toUpperCase());
-        storageConfig.tencent[key] = config.config_value || '';
+      const key = config.config_key;
+      const value = config.config_value || '';
+      
+      if (key === 'storage_type') {
+        storageConfig.storage_type = value || 'r2';
+      } else if (key === 'r2_account_id') {
+        storageConfig.r2.account_id = value;
+      } else if (key === 'r2_access_key_id') {
+        storageConfig.r2.access_key_id = value;
+      } else if (key === 'r2_secret_access_key') {
+        storageConfig.r2.secret_access_key = value;
+      } else if (key === 'r2_bucket_name') {
+        storageConfig.r2.bucket_name = value;
+      } else if (key === 'r2_public_url') {
+        storageConfig.r2.public_url = value;
+      } else if (key === 'tencent_secret_id') {
+        storageConfig.tencent.secret_id = value;
+      } else if (key === 'tencent_secret_key') {
+        storageConfig.tencent.secret_key = value;
+      } else if (key === 'tencent_region') {
+        storageConfig.tencent.region = value || 'ap-guangzhou';
+      } else if (key === 'tencent_bucket') {
+        storageConfig.tencent.bucket = value;
+      } else if (key === 'tencent_public_url') {
+        storageConfig.tencent.public_url = value;
       }
     });
 
@@ -674,6 +691,10 @@ router.put('/storage', verifyAdmin, [
         }
       }
     }
+
+    // 重新加载存储配置
+    const { reloadConfig: reloadStorageConfig } = require('../services/storage');
+    await reloadStorageConfig();
 
     res.json({ success: true, message: '存储配置更新成功' });
   } catch (error) {
@@ -756,6 +777,10 @@ router.put('/sms', verifyAdmin, [
         }
       }
     }
+
+    // 重新加载短信配置
+    const { reloadConfig: reloadSMSConfig } = require('../services/sms');
+    await reloadSMSConfig();
 
     res.json({ success: true, message: '短信配置更新成功' });
   } catch (error) {
@@ -851,6 +876,10 @@ router.put('/email', verifyAdmin, [
         );
       }
     }
+
+    // 重新加载邮件配置
+    const { reloadConfig: reloadEmailConfig } = require('../services/email');
+    await reloadEmailConfig();
 
     res.json({ success: true, message: '邮件配置更新成功' });
   } catch (error) {
